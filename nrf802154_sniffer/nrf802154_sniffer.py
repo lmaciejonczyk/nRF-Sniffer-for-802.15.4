@@ -423,21 +423,27 @@ class Nrf802154Sniffer(object):
         """
         Thread responsible for writing packets into pcap file/fifo from queue.
         """
-        with open(fifo, 'wb', 0 ) as fh:
-            fh.write(self.pcap_header())
-            fh.flush()
+        if fifo == '-':
+            fh = sys.stdout
+            write_bytearray = fh.buffer.write
+        else:
+            fh = open(fifo, 'wb', 0 )
+            write_bytearray = fh.write
 
-            while self.running.is_set():
+        write_bytearray(self.pcap_header())
+        fh.flush()
+
+        while self.running.is_set():
+            try:
+                packet = queue.get(block=True, timeout=1)
                 try:
-                    packet = queue.get(block=True, timeout=1)
-                    try:
-                        fh.write(packet)
-                        fh.flush()
-                    except IOError:
-                        pass
-
-                except Queue.Empty:
+                    write_bytearray(packet)
+                    fh.flush()
+                except IOError:
                     pass
+
+            except Queue.Empty:
+                pass
 
     def extcap_capture(self, fifo, dev, channel, metadata=None, control_in=None, control_out=None):
         """
